@@ -55,7 +55,7 @@ impl FileObject {
 
     /// Create a new file object (day 2) and write the file to the disk (day 4).
     pub fn create(path: &Path, data: Vec<u8>) -> Result<Self> {
-        unimplemented!()
+        Ok(FileObject(Bytes::from(data)))
     }
 
     pub fn open(path: &Path) -> Result<Self> {
