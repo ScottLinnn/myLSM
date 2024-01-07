@@ -45,7 +45,7 @@ impl BlockMeta {
     /// Decode block meta from a buffer.
     pub fn decode_block_meta(mut buf: impl Buf) -> Vec<BlockMeta> {
         let usize_size = std::mem::size_of::<usize>();
-        let total_len = buf.remaining();
+        let total_len: usize = buf.remaining();
 
         let mut block_metas = Vec::new();
 
@@ -125,14 +125,16 @@ impl SsTable {
     pub fn open(id: usize, block_cache: Option<Arc<BlockCache>>, file: FileObject) -> Result<Self> {
         let usize_size = std::mem::size_of::<usize>();
         let total_size: u64 = file.size();
+
         let bmo_vec = file
             .read(total_size - usize_size as u64, usize_size as u64)
             .expect("cant read bmo vec from file");
         let block_meta_offset = Bytes::from(bmo_vec).get_u64();
+
         let block_metas_bytes = file
             .read(
                 block_meta_offset,
-                total_size - usize_size as u64 - block_meta_offset,
+                total_size - block_meta_offset - (usize_size as u64),
             )
             .expect("cant read block_metas_bytes from file");
         let block_metas = BlockMeta::decode_block_meta(Bytes::from(block_metas_bytes));
@@ -145,15 +147,15 @@ impl SsTable {
 
     /// Read a block from the disk.
     pub fn read_block(&self, block_idx: usize) -> Result<Arc<Block>> {
-        let start_offset = self.block_metas[block_idx].offset as u64;
+        let start_offset: u64 = self.block_metas[block_idx].offset as u64;
 
-        let mut end_offset = 0u64;
-        if block_idx >= self.block_metas.len() {
+        let mut end_offset: u64 = 0u64;
+        if block_idx >= self.block_metas.len() - 1 {
             end_offset = self.block_meta_offset as u64;
         } else {
             end_offset = self.block_metas[block_idx + 1].offset as u64;
         }
-        let block = Block::decode(
+        let block: Block = Block::decode(
             self.file
                 .read(start_offset, end_offset - start_offset)
                 .expect("cant read a block from file")

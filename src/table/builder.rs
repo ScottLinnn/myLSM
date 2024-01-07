@@ -44,6 +44,7 @@ impl SsTableBuilder {
             self.bytes.append(&mut bytes.to_vec());
 
             let block_iter = BlockIterator::create_and_seek_to_first(Arc::new(built_block));
+
             self.meta.push(BlockMeta {
                 offset: self.total_size,
                 first_key: Bytes::copy_from_slice(block_iter.key()),
@@ -64,13 +65,25 @@ impl SsTableBuilder {
     /// Builds the SSTable and writes it to the given path. No need to actually write to disk until
     /// chapter 4 block cache.
     pub fn build(
-        self,
+        mut self,
         id: usize,
         block_cache: Option<Arc<BlockCache>>,
         path: impl AsRef<Path>,
     ) -> Result<SsTable> {
+        let built_block = self.block_builder.build();
+        let bytes = built_block.encode();
+        self.bytes.append(&mut bytes.to_vec());
+
+        let block_iter = BlockIterator::create_and_seek_to_first(Arc::new(built_block));
+
+        self.meta.push(BlockMeta {
+            offset: self.total_size,
+            first_key: Bytes::copy_from_slice(block_iter.key()),
+        });
+
         let mut buf = self.bytes;
 
+        self.total_size = buf.len();
         BlockMeta::encode_block_meta(&self.meta, &mut buf);
         let fo = super::FileObject::create(path.as_ref(), buf);
 
@@ -82,7 +95,7 @@ impl SsTableBuilder {
     }
 
     #[cfg(test)]
-    pub(crate) fn build_for_test(self, path: impl AsRef<Path>) -> Result<SsTable> {
+    pub(crate) fn build_for_test(mut self, path: impl AsRef<Path>) -> Result<SsTable> {
         self.build(0, None, path)
     }
 }

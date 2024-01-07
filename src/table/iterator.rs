@@ -1,7 +1,7 @@
 #![allow(unused_variables)] // TODO(you): remove this lint after implementing this mod
 #![allow(dead_code)] // TODO(you): remove this lint after implementing this mod
 
-use std::sync::Arc;
+use std::{io::Bytes, sync::Arc};
 
 use anyhow::{Error, Ok, Result};
 
@@ -56,9 +56,8 @@ impl SsTableIterator {
     /// Note: You probably want to review the handout for detailed explanation when implementing this function.
     pub fn seek_to_key(&mut self, key: &[u8]) -> Result<()> {
         let mut left: usize = 0;
-        let mut right: usize = self.table.num_of_blocks();
+        let mut right: usize = self.table.num_of_blocks() - 1;
         let mut mid = (left + right) / 2;
-
         while left < right {
             let curr_key = &self.table.block_metas[mid].first_key;
             if self.compare_bytes(curr_key, key) {
@@ -70,32 +69,34 @@ impl SsTableIterator {
                     let next_key = &self.table.block_metas[mid + 1].first_key;
                     // If first key in next block is larger than query key, then this block is the one
                     if self.compare_bytes(next_key, key) {
-                        self.idx = mid;
-                        let block = self.table.read_block(mid).expect("Cannot read block");
-                        self.block_it = BlockIterator::create_and_seek_to_first(block);
-                        self.block_it.seek_to_key(key);
-                        return Ok(());
+                        break;
                     } else {
                         // Next block is also smaller, we need to continue searching
                         left = mid + 1;
                         mid = (left + right) / 2;
                     }
                 } else {
-                    // If not exist, meaning curr block is last block, has to be it.
-                    self.idx = mid;
-                    let block = self.table.read_block(mid).expect("Cannot read block");
-                    self.block_it = BlockIterator::create_and_seek_to_first(block);
-                    self.block_it.seek_to_key(key);
-                    return Ok(());
+                    // If not exist, meaning curr block is last block, has to be it.=
+                    break;
                 }
             }
         }
+        let block = self.table.read_block(mid).expect("Cannot read block");
+        self.block_it = BlockIterator::create_and_seek_to_first(block);
+        self.block_it.seek_to_key(key);
+        if !self.block_it.is_valid() && mid < self.table.num_of_blocks() - 1 {
+            mid += 1;
+            let block = self.table.read_block(mid).expect("Cannot read block");
+            self.block_it = BlockIterator::create_and_seek_to_first(block);
+            self.block_it.seek_to_key(key);
+        }
+        self.idx = mid;
         Ok(())
     }
 
     fn compare_bytes(&self, left: &[u8], right: &[u8]) -> bool {
         return String::from_utf8(left.to_vec()).unwrap()
-            >= String::from_utf8(right.to_vec()).unwrap();
+            > String::from_utf8(right.to_vec()).unwrap();
     }
 }
 
@@ -119,9 +120,9 @@ impl StorageIterator for SsTableIterator {
     /// Note: You may want to check if the current block iterator is valid after the move.
     fn next(&mut self) -> Result<()> {
         self.block_it.next();
-        if self.block_it.is_valid() && self.idx < self.table.num_of_blocks() - 1 {
+        if !self.block_it.is_valid() && self.idx < self.table.num_of_blocks() - 1 {
             self.idx += 1;
-            let block = self.table.read_block(self.idx).expect("Cannot read block");
+            let block: Arc<Block> = self.table.read_block(self.idx).expect("Cannot read block");
             self.block_it = BlockIterator::create_and_seek_to_first(block);
         }
         Ok(())

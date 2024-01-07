@@ -54,4 +54,8 @@ impl BlockBuilder {
     pub fn build(self) -> Block {
         self.block
     }
+
+    pub fn full(self) -> bool {
+        return self.curr_size >= self.block_size;
+    }
 }
