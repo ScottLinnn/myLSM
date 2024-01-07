@@ -18,7 +18,7 @@ pub struct SsTableBuilder {
     block_builder: BlockBuilder,
     block_size: usize,
     total_size: usize,
-    block_bytes: Vec<u8>,
+    bytes: Vec<u8>,
 }
 
 impl SsTableBuilder {
@@ -29,7 +29,7 @@ impl SsTableBuilder {
             block_builder: BlockBuilder::new(block_size),
             block_size: block_size,
             total_size: 0,
-            block_bytes: Vec::new(),
+            bytes: Vec::new(),
         }
     }
 
@@ -41,7 +41,7 @@ impl SsTableBuilder {
                 mem::replace(&mut self.block_builder, BlockBuilder::new(self.block_size));
             let built_block = old_builder.build();
             let bytes = built_block.encode();
-            self.block_bytes.append(&mut bytes.to_vec());
+            self.bytes.append(&mut bytes.to_vec());
 
             let block_iter = BlockIterator::create_and_seek_to_first(Arc::new(built_block));
             self.meta.push(BlockMeta {
@@ -69,7 +69,11 @@ impl SsTableBuilder {
         block_cache: Option<Arc<BlockCache>>,
         path: impl AsRef<Path>,
     ) -> Result<SsTable> {
-        let fo = super::FileObject::create(path.as_ref(), self.block_bytes);
+        let mut buf = self.bytes;
+
+        BlockMeta::encode_block_meta(&self.meta, &mut buf);
+        let fo = super::FileObject::create(path.as_ref(), buf);
+
         Ok(SsTable {
             file: fo.unwrap(),
             block_metas: self.meta,
