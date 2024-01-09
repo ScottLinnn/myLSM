@@ -3,6 +3,7 @@
 
 use std::cmp::{self};
 use std::collections::BinaryHeap;
+use std::usize;
 
 use anyhow::Result;
 
@@ -44,24 +45,50 @@ pub struct MergeIterator<I: StorageIterator> {
 
 impl<I: StorageIterator> MergeIterator<I> {
     pub fn create(iters: Vec<Box<I>>) -> Self {
-        unimplemented!()
+        let mut idx: usize = 0 as usize;
+        let mut bh: BinaryHeap<HeapWrapper<I>> = BinaryHeap::new();
+
+        for iter in iters {
+            if !iter.is_valid() {
+                continue;
+            }
+            let hw = HeapWrapper { 0: idx, 1: iter };
+            bh.push(hw);
+            idx += 1;
+        }
+        // println!("heap size: {}", bh.len());
+        if bh.is_empty() {
+            panic!("fail to create");
+        }
+        let curr: HeapWrapper<I> = bh.pop().unwrap();
+        MergeIterator {
+            iters: bh,
+            current: curr,
+        }
     }
 }
 
 impl<I: StorageIterator> StorageIterator for MergeIterator<I> {
     fn key(&self) -> &[u8] {
-        unimplemented!()
+        self.current.1.key()
     }
 
     fn value(&self) -> &[u8] {
-        unimplemented!()
+        self.current.1.value()
     }
 
     fn is_valid(&self) -> bool {
-        unimplemented!()
+        self.current.1.is_valid()
     }
 
     fn next(&mut self) -> Result<()> {
-        unimplemented!()
+        let _ = self.current.1.next();
+        while !self.current.1.is_valid() {
+            if self.iters.is_empty() {
+                break;
+            }
+            self.current = self.iters.pop().unwrap();
+        }
+        Ok(())
     }
 }

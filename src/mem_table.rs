@@ -54,13 +54,15 @@ impl MemTable {
         };
 
         // Create the MemTableIterator
-        let it = MemTableIteratorBuilder {
+        let mut it = MemTableIteratorBuilder {
             map: Arc::clone(&self.map),
             iter_builder: |map: &Arc<SkipMap<Bytes, Bytes>>| map.range((lower_bound, upper_bound)),
             // You may need to adjust the item field initialization based on your actual use case
             item: (Bytes::new(), Bytes::new()),
         }
         .build();
+        let entry = it.with_iter_mut(|it| MemTableIterator::entry_to_item(it.next()));
+        it.with_mut(|x| *x.item = entry);
         return it;
     }
 
@@ -96,11 +98,11 @@ impl MemTableIterator {
 
 impl StorageIterator for MemTableIterator {
     fn value(&self) -> &[u8] {
-        &self.borrow_item().1
+        &self.borrow_item().1[..]
     }
 
     fn key(&self) -> &[u8] {
-        &self.borrow_item().0
+        &self.borrow_item().0[..]
     }
 
     fn is_valid(&self) -> bool {
