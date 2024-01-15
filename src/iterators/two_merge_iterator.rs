@@ -4,6 +4,7 @@
 use std::f32::consts::E;
 
 use anyhow::Result;
+use bytes::Bytes;
 
 use super::StorageIterator;
 
@@ -19,24 +20,44 @@ pub struct TwoMergeIterator<A: StorageIterator, B: StorageIterator> {
 
 impl<A: StorageIterator, B: StorageIterator> TwoMergeIterator<A, B> {
     pub fn create(a: A, b: B) -> Result<Self> {
-        Ok(Self { a, b })
+        let mut res = Self { a, b };
+        if res.a.is_valid() && res.b.is_valid() && res.a.key() == res.b.key() {
+            let _ = res.b.next();
+        }
+        return Ok(res);
     }
 }
 
 impl<A: StorageIterator, B: StorageIterator> StorageIterator for TwoMergeIterator<A, B> {
     fn key(&self) -> &[u8] {
-        if self.b.is_valid() {
-            self.b.key()
-        } else {
+        if self.a.is_valid() && !self.b.is_valid() {
             self.a.key()
+        } else if !self.a.is_valid() && self.b.is_valid() {
+            self.b.key()
+        } else if self.a.is_valid() && self.b.is_valid() {
+            if self.a.key() <= self.b.key() {
+                self.a.key()
+            } else {
+                self.b.key()
+            }
+        } else {
+            &[0]
         }
     }
 
     fn value(&self) -> &[u8] {
-        if self.b.is_valid() {
-            self.b.value()
-        } else {
+        if self.a.is_valid() && !self.b.is_valid() {
             self.a.value()
+        } else if !self.a.is_valid() && self.b.is_valid() {
+            self.b.value()
+        } else if self.a.is_valid() && self.b.is_valid() {
+            if self.a.key() <= self.b.key() {
+                self.a.value()
+            } else {
+                self.b.value()
+            }
+        } else {
+            &[0]
         }
     }
 
@@ -45,16 +66,27 @@ impl<A: StorageIterator, B: StorageIterator> StorageIterator for TwoMergeIterato
     }
 
     fn next(&mut self) -> Result<()> {
-        if self.b.is_valid() {
+        if self.a.is_valid() && !self.b.is_valid() {
+            let _ = self.a.next();
+            return Ok(());
+        } else if !self.a.is_valid() && self.b.is_valid() {
             let _ = self.b.next();
-        }
-        if self.b.is_valid() {
             return Ok(());
+        } else if self.a.is_valid() && self.b.is_valid() {
+            if self.a.key() < self.b.key() {
+                let _ = self.a.next();
+                if self.a.is_valid() && self.a.key() == self.b.key() {
+                    let _ = self.b.next();
+                }
+                return Ok(());
+            } else {
+                let _ = self.b.next();
+                if self.b.is_valid() && self.a.key() == self.b.key() {
+                    let _ = self.b.next();
+                }
+            }
         }
-        let _ = self.a.next();
-        if self.a.is_valid() {
-            return Ok(());
-        }
+
         return Ok(()); // error handling todo
     }
 }

@@ -1,7 +1,9 @@
 #![allow(unused_variables)] // TODO(you): remove this lint after implementing this mod
 #![allow(dead_code)] // TODO(you): remove this lint after implementing this mod
 
+// Some code from the reference solution
 use std::cmp::{self};
+use std::collections::binary_heap::PeekMut;
 use std::collections::BinaryHeap;
 use std::usize;
 
@@ -82,13 +84,46 @@ impl<I: StorageIterator> StorageIterator for MergeIterator<I> {
     }
 
     fn next(&mut self) -> Result<()> {
-        let _ = self.current.1.next();
-        while !self.current.1.is_valid() {
-            if self.iters.is_empty() {
+        // let mut current = &self.current;
+        // Pop the item out of the heap if they have the same value.
+        while let Some(mut inner_iter) = self.iters.peek_mut() {
+            debug_assert!(
+                inner_iter.1.key() >= self.current.1.key(),
+                "heap invariant violated"
+            );
+            if inner_iter.1.key() == self.current.1.key() {
+                // Case 1: an error occurred when calling `next`.
+                if let e @ Err(_) = inner_iter.1.next() {
+                    PeekMut::pop(inner_iter);
+                    return e;
+                }
+
+                // Case 2: iter is no longer valid.
+                if !inner_iter.1.is_valid() {
+                    PeekMut::pop(inner_iter);
+                }
+            } else {
                 break;
             }
-            self.current = self.iters.pop().unwrap();
         }
+
+        self.current.1.next()?;
+
+        // If the current iterator is invalid, pop it out of the heap and select the next one.
+        if !self.current.1.is_valid() {
+            if let Some(iter) = self.iters.pop() {
+                self.current = iter;
+            }
+            return Ok(());
+        }
+
+        // Otherwise, compare with heap top and swap if necessary.
+        if let Some(mut inner_iter) = self.iters.peek_mut() {
+            if self.current < *inner_iter {
+                std::mem::swap(&mut *inner_iter, &mut self.current);
+            }
+        }
+
         Ok(())
     }
 }
